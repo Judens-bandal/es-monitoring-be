@@ -62,6 +62,9 @@ export class EsDiscordFormatterService {
     const heap = node.jvm.mem;
     const cpu = node.os.cpu.percent;
     const load1m = node.os.cpu.load_average?.['1m'] ?? 0;
+    const load5m = node.os.cpu.load_average?.['5m'] ?? 0;
+    const load15m = node.os.cpu.load_average?.['15m'] ?? 0;
+
     const diskUsed = disk.total_in_bytes - disk.available_in_bytes;
 
     const memS = statusLevel(
@@ -171,6 +174,8 @@ export class EsDiscordFormatterService {
                 '',
                 ` System CPU`,
                 ` Load 1m  \`${load1m}\``,
+                ` Load 5m  \`${load5m}\``,
+                ` Load 15m  \`${load15m}\``,
                 ` ES CPU   \`${node.process.cpu.percent}%\``,
               ].join('\n'),
               inline: true,

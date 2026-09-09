@@ -8,9 +8,7 @@ import { ElasticsearchlogConfig } from './config/elasticsearchlog-config';
 import { MonitoringService } from './elasticsearch/monitoring.service';
 import { ElasticsearchlogService } from './elasticsearch/elasticsearchlog.service';
 import { ElasticsearchController } from './elasticsearch/elasticsearch.controller';
-import { EsDiscordFormatterService } from './descord-alerts/es-discord-formatter.service';
 import { DiscordAlertsModule } from './descord-alerts/discord-alerts.module';
-import { DiscordAlertsService } from './descord-alerts/discord-alerts.service';
 
 @Module({
   imports: [
@@ -27,8 +25,6 @@ import { DiscordAlertsService } from './descord-alerts/discord-alerts.service';
   controllers: [ElasticsearchController],
 
   providers: [
-    EsDiscordFormatterService,
-    DiscordAlertsService,
     ElasticsearchService,
     ElasticsearchConfig,
     ElasticsearchlogConfig,

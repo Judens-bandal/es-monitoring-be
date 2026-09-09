@@ -18,14 +18,19 @@ import {
 } from '../interfaces/node-elasticsearch.interface';
 import { EsDiscordFormatterService } from '../descord-alerts/es-discord-formatter.service';
 import { DiscordAlertsService } from '../descord-alerts/discord-alerts.service';
-
+import * as fs from 'fs';
+import * as path from 'path';
 @Injectable()
 export class MonitoringService {
   private readonly logger = new Logger(MonitoringService.name);
   //--- alert cooldown state ---
-  private lastAlertKey: string | null = null;
-  private lastAlertTime = 0;
+  // private lastAlertKey: string | null = null;
+  // private lastAlertTime = 0;
   private readonly ALERT_COOLDOWN_MS = 30 * 60 * 1000; // 30 minutes
+  private readonly cooldownFilePath: string = path.join(
+    process.cwd(),
+    'alert-cooldown.json',
+  );
 
   constructor(
     private readonly elasticsearchService: ElasticsearchService,
@@ -40,6 +45,80 @@ export class MonitoringService {
     await this.discordAlert.sendPayload(payload);
   }
 
+  private readCooldownState(): { key: string | null; time: number } {
+    try {
+      if (!fs.existsSync(this.cooldownFilePath)) {
+        return { key: null, time: 0 };
+      }
+      const raw = fs.readFileSync(this.cooldownFilePath, 'utf-8');
+      const parsed: unknown = JSON.parse(raw) as unknown;
+      if (
+        typeof parsed === 'object' &&
+        parsed !== null &&
+        'key' in parsed &&
+        'time' in parsed &&
+        (typeof parsed.key === 'string' || parsed.key === null) &&
+        typeof parsed.time === 'number'
+      ) {
+        return { key: parsed.key, time: parsed.time };
+      }
+      return { key: null, time: 0 };
+    } catch {
+      return { key: null, time: 0 };
+    }
+  }
+  private writeCooldownState(key: string, time: number): void {
+    try {
+      fs.writeFileSync(
+        this.cooldownFilePath,
+        JSON.stringify({ key, time }),
+        'utf-8',
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to write alert cooldown state: ${getErrorMessage(error)}`,
+      );
+    }
+  }
+
+  // private shouldAlert(stats: NodeResourceStatsResponse): boolean {
+  //   const { cluster, nodes } = stats;
+  //   const node = nodes[0];
+  //   if (!node) return false;
+
+  //   const isUnhealthy =
+  //     cluster.status !== 'green' ||
+  //     node.os.mem.used_percent >= 90 ||
+  //     node.jvm.mem.heap_used_percent >= 85 ||
+  //     node.fs.total.disk_used_percent >= 85 ||
+  //     node.process.cpu.percent >= 90;
+
+  //   if (!isUnhealthy) {
+  //     this.lastAlertKey = null; // reset so the next incident alerts immediately
+  //     return false;
+  //   }
+
+  //   const key = [
+  //     cluster.status,
+  //     node.os.mem.used_percent >= 90,
+  //     node.jvm.mem.heap_used_percent >= 85,
+  //     node.fs.total.disk_used_percent >= 85,
+  //     node.process.cpu.percent >= 90,
+  //   ].join('-');
+
+  //   const now = Date.now();
+  //   if (
+  //     key === this.lastAlertKey &&
+  //     now - this.lastAlertTime < this.ALERT_COOLDOWN_MS
+  //   ) {
+  //     return false; // same issue, still cooling down
+  //   }
+
+  //   this.lastAlertKey = key;
+  //   this.lastAlertTime = now;
+  //   return true;
+  // }
+
   private shouldAlert(stats: NodeResourceStatsResponse): boolean {
     const { cluster, nodes } = stats;
     const node = nodes[0];
@@ -53,8 +132,7 @@ export class MonitoringService {
       node.process.cpu.percent >= 90;
 
     if (!isUnhealthy) {
-      this.lastAlertKey = null; // reset so the next incident alerts immediately
-      return false;
+      return false; // no longer resets cooldown on recovery — avoids flapping bug
     }
 
     const key = [
@@ -65,16 +143,14 @@ export class MonitoringService {
       node.process.cpu.percent >= 90,
     ].join('-');
 
+    const { key: lastKey, time: lastTime } = this.readCooldownState();
     const now = Date.now();
-    if (
-      key === this.lastAlertKey &&
-      now - this.lastAlertTime < this.ALERT_COOLDOWN_MS
-    ) {
-      return false; // same issue, still cooling down
+
+    if (key === lastKey && now - lastTime < this.ALERT_COOLDOWN_MS) {
+      return false;
     }
 
-    this.lastAlertKey = key;
-    this.lastAlertTime = now;
+    this.writeCooldownState(key, now);
     return true;
   }
 
