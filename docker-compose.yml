@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  es-monitoring-api:
+    build: .
+    image: es-monitoring-api:${NODE_ENV:-development}
+    container_name: es-monitoring-api
+    ports:
+      - '${PORT:-3000}:3000'
+    env_file:
+      - .env.${NODE_ENV:-development}
+    restart: unless-stopped
+    mem_limit: 256m
+    cpus: 0.5
